@@ -1,0 +1,70 @@
+Practical Machine Learning Course Project
+=============================
+
+##Introduction
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. 
+
+##Process the data
+
+```{r}
+library(caret)
+library(dplyr)
+library(randomForest)
+library(e1071)
+pmltrain <- read.csv("pml-training.csv",na.strings=c("NA","","#DIV/0!"))
+##split pmltrain into train set and test set
+inTrain <- createDataPartition(y = pmltrain$classe, list = FALSE, p=0.7)
+trainData <- pmltrain[inTrain,]
+testData <- pmltrain[-inTrain,]
+```
+
+##Select predictors
+
+```{r}
+##identify variables that are mostly NAs
+naprops <- colSums(is.na(trainData))/nrow(trainData)
+mostlyNAs <- names(naprops[naprops > 0.75])
+mostlyNACols <- which(naprops > 0.75)
+##take a random small sample from the train set
+set.seed(1256)
+smalltrain <- trainData %>% tbl_df %>% sample_n(size=1000)
+##remove the variables that are mostly NAs
+smalltrain <- smalltrain[,-mostlyNACols]
+##remove row number and user name as candidate predictors
+smalltrain <- smalltrain[,-grep("X|user_name",names(smalltrain))]
+##remove the cvtd_timestamp variable as a candidate predictor
+smalltrain <- smalltrain[,-grep("cvtd_timestamp",names(smalltrain))]
+##remove candidate predictors that have near zero variance
+smalltrain <- smalltrain[,-nearZeroVar(smalltrain)]
+##list the candidate predictors
+modelVars <- names(smalltrain)
+modelVars1 <- modelVars[-grep("classe",modelVars)]
+modelVars1
+```
+
+##Build a random forest model
+
+```{r}
+set.seed(57)
+cleanedTrainData <- trainData[,modelVars]
+modelFit <- randomForest(classe ~., data=cleanedTrainData, type="class")
+##estimate the errors
+predTrain <- predict(modelFit,newdata=trainData)
+###in sample error
+confusionMatrix(predTrain,trainData$classe)$table
+###our of sample error
+classe_col <- grep("classe",names(testData))
+predTest <- predict(modelFit, newdata = testData[,-classe_col], type="class")
+confusionMatrix(predTest,testData$classe)
+```
+
+This model has an out of sample accuracy of 0.998.
+
+##Prediction using the model
+
+```{r}
+pmltest <- read.csv("pml-testing.csv",na.strings=c("NA","","#DIV/0!"))
+predplmtest <- predict(modelFit, newdata = pmltest, type="class")
+predplmtest
+```
+
